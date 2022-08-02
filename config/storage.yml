@@ -1,0 +1,20 @@
+local:
+  service: Disk
+  root: <%= ENV['PWD'] %>/adsnap-admin-attachments
+
+disk:
+  service: Disk
+  root: <%= ENV['PWD'] %>/adsnap-admin-attachments
+
+aws_s3:
+  service: S3
+  access_key_id: <%= ENV['AWS_ACCESS_KEY_ID'] %>
+  secret_access_key: <%= ENV['AWS_SECRET_ACCESS_KEY'] %>
+  region: <%= ENV['AWS_REGION'] %>
+  bucket: <%= ENV['S3_ATTACHMENTS_BUCKET'] %>
+
+google:
+  service: GCS
+  credentials: <%= JSON.parse(ENV['GCS_CREDENTIALS'] || '{}') %>
+  project: <%= ENV['GCS_PROJECT'] %>
+  bucket: <%= ENV['GCS_BUCKET'] %>

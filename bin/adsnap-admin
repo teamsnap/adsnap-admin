@@ -1,0 +1,81 @@
+#!/usr/bin/env ruby
+
+aliases = {
+  's'  => 'server',
+  'sync' => 'config:sync',
+  'load' => 'config:load',
+  'reload' => 'config:reload',
+  'dump' => 'config:dump'
+}
+
+command = ARGV.shift unless ARGV.first.to_s.start_with?('-')
+command = aliases[command] || command || 'server'
+
+fail("Invalid command") unless aliases.value?(command)
+
+require 'dotenv'
+
+dotenv_filename = 'adsnap-admin.env'
+
+if File.exists?(dotenv_filename)
+  Dotenv.load(dotenv_filename)
+elsif ENV['SECRET_KEY_BASE'].to_s.empty?
+  require 'securerandom'
+
+  default_env_content = <<~ENV
+    BASE_PATH=/
+    DATABASE_URL= # Service database URL
+    SECRET_KEY_BASE=#{SecureRandom.hex(64)}
+    HOST=
+    PORT=3000
+    SSL_KEY_PATH=
+    SSL_CERT_PATH=
+    SYNC_API_KEY=
+    SYNC_REMOTE_URL=
+  ENV
+
+  File.write(dotenv_filename, default_env_content)
+
+  Dotenv.load(dotenv_filename)
+end
+
+ENV['RAILS_ENV'] = 'production'
+
+%w[BASE_PATH DATABASE_URL SECRET_KEY_BASE HOST PORT SSL_CERT_PATH SSL_KEY_PATH SYNC_API_KEY SYNC_REMOTE_URL].each do |key|
+  prefix_key = "MOTOR_#{key}"
+
+  ENV[key] = ENV[prefix_key] if !ENV[prefix_key].to_s.empty?
+end
+
+ENV.delete('DATABASE_URL') if ENV['DATABASE_URL'].to_s.empty?
+
+fail('SECRET_KEY_BASE should contain at least 64 characters') if ENV['SECRET_KEY_BASE'].to_s.size < 64
+
+APP_PATH = File.expand_path('../config/application', __dir__)
+require_relative '../config/boot'
+require 'rails/command'
+
+if command == 'server' && !ENV['SSL_KEY_PATH'].to_s.empty?
+  ARGV.push('-b', "ssl://0.0.0.0:#{ENV.fetch('PORT', 3000)}?key=#{ENV['SSL_KEY_PATH']}&cert=#{ENV['SSL_CERT_PATH']}")
+end
+
+
+if command == 'server'
+  puts '=> Starting Adsnap Admin - https://www.teamsnap.com/'
+  Rails::Command.invoke(command, ARGV)
+else
+  require_relative '../config/application'
+
+  Rails.application.require_environment!
+
+  case command
+  when 'config:sync'
+    Adsnap::ConfigsCli.sync
+  when 'config:load'
+    Adsnap::ConfigsCli.load
+  when 'config:reload'
+    Adsnap::ConfigsCli.reload
+  when 'config:dump'
+    Adsnap::ConfigsCli.dump
+  end
+end
